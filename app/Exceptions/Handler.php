@@ -2,7 +2,15 @@
 
 namespace App\Exceptions;
 
+use App\Common\CanNotDeleteException;
+use App\Common\ErrorCodes;
+use App\Common\NotFoundException;
+use App\EmailDomain\Code\Exception\CodeNotFoundException;
+use App\MovieDomain\User\Exception\NonValidPasswordException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -37,14 +45,63 @@ class Handler extends ExceptionHandler
     ];
 
     /**
-     * Register the exception handling callbacks for the application.
-     *
-     * @return void
+     * @param \Illuminate\Http\Request $request
+     * @param Throwable $e
+     * @return JsonResponse
      */
-    public function register()
+    public function render($request, Throwable $e): JsonResponse
     {
-        $this->reportable(function (Throwable $e) {
-            //
-        });
+        return match (true) {
+            $e instanceof CodeNotFoundException => $this->mapCodeNotFoundException($e),
+            $e instanceof ValidationException => $this->mapValidationException($e),
+            default => $this->mapExceptionByDefault($e)
+        };
+    }
+
+    /**
+     * @param Throwable $e
+     * @return JsonResponse
+     */
+    private function mapExceptionByDefault(Throwable $e): JsonResponse
+    {
+        return response()->json(
+            [
+                'message' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+            ],
+            Response::HTTP_INTERNAL_SERVER_ERROR
+        );
+    }
+
+    /**
+     * @param CodeNotFoundException $e
+     * @return JsonResponse
+     */
+    private function mapCodeNotFoundException(CodeNotFoundException $e): JsonResponse
+    {
+        return response()->json(
+            [
+                'message' => $e->getMessage(),
+                'error' => ErrorCodes::CODE_NOT_FOUND()->value,
+                'error_code' => ErrorCodes::CODE_NOT_FOUND()->label,
+            ],
+            Response::HTTP_BAD_REQUEST
+        );
+    }
+
+    /**
+     * @param ValidationException $e
+     * @return JsonResponse
+     */
+    private function mapValidationException(ValidationException $e): JsonResponse
+    {
+        return response()->json(
+            [
+                'message' => $e->getMessage(),
+                'error' => ErrorCodes::NOV_VALID_REQUEST()->value,
+                'error_code' => ErrorCodes::NOV_VALID_REQUEST()->label,
+            ],
+            Response::HTTP_BAD_REQUEST
+        );
     }
 }
